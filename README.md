@@ -25,11 +25,12 @@ Oracle Linux 8 icin;
   - systemctl restart wazuh-agent.service
 
 ### Ansible ile wazuh agent'lari guncelleme
-Bu playbook sadece guncel yara kurallari yayinlandiginda sunuculara dagitim yapacak. Boylece gereksiz yere tum sunucularin kural guncellemek icin trafik yapmasina gerek olmayacak
+Bu playbook sadece guncel yara kurallari yayinlandiginda sunuculara dagitim yapacak. Boylece gereksiz yere tum sunucularin kural guncellemek icin trafik yapmasina gerek olmayacak.
 
   - pip3 install valhallaAPI
   - playbook eklenecek!
 
+#### Ref: documentation.wazuh.com/current/user-manual/capabilities/malware-detection/fim-yara.html
 
-
-Ref: documentation.wazuh.com/current/user-manual/capabilities/malware-detection/fim-yara.html
+#### wazuh-dashboard
+<img width="1873" height="1008" alt="image" src="https://github.com/user-attachments/assets/b097579c-e0fc-4f42-8f7f-cea7fe5550dd" />
