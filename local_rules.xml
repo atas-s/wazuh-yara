@@ -1,0 +1,106 @@
+# ADD  /var/ossec/etc/rules/local_rules.xml 
+<group name="syscheck,">
+  <rule id="100200" level="7">
+    <if_sid>550</if_sid>
+    <field name="file">/root/</field>
+    <description>File modified in /root directory.</description>
+  </rule>
+  <rule id="100201" level="7">
+    <if_sid>554</if_sid>
+    <field name="file">/root/</field>
+    <description>File added to /root directory.</description>
+  </rule>
+  <rule id="100202" level="7">
+    <if_sid>550</if_sid>
+    <field name="file">/etc/</field>
+    <description>File modified in /etc directory.</description>
+  </rule>
+  <rule id="100203" level="7">
+    <if_sid>554</if_sid>
+    <field name="file">/etc/</field>
+    <description>File added to /etc directory.</description>
+  </rule>
+  <rule id="100204" level="7">
+    <if_sid>550</if_sid>
+    <field name="file">/usr/local/bin/</field>
+    <description>File modified in /usr/local/bin directory.</description>
+  </rule>
+  <rule id="100205" level="7">
+    <if_sid>554</if_sid>
+    <field name="file">/usr/local/bin/</field>
+    <description>File added to /usr/local/bin directory.</description>
+  </rule>
+ <rule id="100206" level="7">
+   <if_sid>550</if_sid>
+   <field name="file">/usr/local/sbin/</field>
+   <description>File modified in /usr/local/sbin directory.</description>
+ </rule>
+ <rule id="100207" level="7">
+   <if_sid>554</if_sid>
+   <field name="file">/usr/local/sbin/</field>
+   <description>File added to /usr/local/sbin directory.</description>
+ </rule>
+ <rule id="100208" level="7">
+   <if_sid>550</if_sid>
+   <field name="file">/bin/</field>
+   <description>File modified in /bin directory.</description>
+ </rule>
+ <rule id="100209" level="7">
+   <if_sid>554</if_sid>
+   <field name="file">/bin/</field>
+   <description>File added to /bin directory.</description>
+ </rule>
+ <rule id="100210" level="7">
+   <if_sid>550</if_sid>
+   <field name="file">/sbin/</field>
+   <description>File modified in /sbin directory.</description>
+   </rule>
+ <rule id="100211" level="7">
+   <if_sid>554</if_sid>
+   <field name="file">/sbin/</field>
+   <description>File added to /sbin directory.</description>
+ </rule>
+ <rule id="100212" level="7">
+   <if_sid>550</if_sid>
+   <field name="file">/usr/bin/</field>
+   <description>File modified in /usr/bin directory.</description>
+ </rule>
+ <rule id="100213" level="7">
+   <if_sid>554</if_sid>
+   <field name="file">/usr/bin/</field>
+   <description>File added to /usr/bin directory.</description>
+ </rule>
+ <rule id="100214" level="7">
+   <if_sid>550</if_sid>
+   <field name="file">/usr/sbin/</field>
+   <description>File modified in /usr/sbin directory.</description>
+   </rule>
+ <rule id="100215" level="7">
+   <if_sid>554</if_sid>
+   <field name="file">/usr/sbin/</field>
+   <description>File added to /usr/sbin directory.</description>
+ </rule>
+ <rule id="100216" level="7">
+   <if_sid>550</if_sid>
+   <field name="file">/tmp/</field>
+   <description>File modified in /tmp directory.</description>
+ </rule>
+ <rule id="100217" level="7">
+   <if_sid>554</if_sid>
+   <field name="file">/tmp/</field>
+   <description>File added to /tmp/ directory.</description>
+ </rule>
+
+</group>
+
+<group name="yara,">
+  <rule id="108000" level="0">
+    <decoded_as>yara_decoder</decoded_as>
+    <description>Yara grouping rule</description>
+  </rule>
+  <rule id="108001" level="12">
+    <if_sid>108000</if_sid>
+    <match>wazuh-yara: INFO - Scan result: </match>
+    <description>File "$(yara_scanned_file)" is a positive match. Yara rule: $(yara_rule)</description>
+  </rule>
+</group>
