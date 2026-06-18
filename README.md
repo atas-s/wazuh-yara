@@ -25,7 +25,7 @@ Oracle Linux 8 icin;
   - systemctl restart wazuh-agent.service
 
 ### Ansible ile wazuh agent'lari guncelleme
-Bu playbook sadece guncel yara kurallari yayinlandiginda sunuculara dagitim yapacak. Boylece gereksiz yere tum sunucularin kural guncellemek icin trafik yapmasina gerek olmayacak.
+Bu playbook sadece yara kurallari guncellendiginde sunuculara dagitim yapacak. Boylece gereksiz yere tum sunucularin kural guncellemek icin trafik yapmasina gerek olmayacak.
 
   - pip3 install valhallaAPI
   - playbook eklenecek!
