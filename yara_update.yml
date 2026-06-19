@@ -1,0 +1,163 @@
+---
+# ==========================================
+# PLAY 1: WAZUH MANAGER OPERATIONS
+# ==========================================
+- name: Download, Validate and Deploy Valhalla YARA Rules to Wazuh Manager
+  hosts: wazuh-server
+  become: yes
+  vars:
+    valhalla_api_key: "YOUR_VALHALLA_API_KEY_HERE"
+    today_str: "{{ lookup('pipe', 'date +%d-%m-%Y') }}"
+    yesterday_str: "{{ lookup('pipe', 'date -d \"yesterday\" +%d-%m-%Y') }}"
+
+    local_rules_dir: "/opt/yara_downloads"
+    local_new_file: "{{ local_rules_dir }}/yara_rules-{{ today_str }}.yar"
+    local_old_file: "{{ local_rules_dir }}/yara_rules-{{ yesterday_str }}.yar"
+    local_eicar_file: "/tmp/eicar_test.txt"
+
+    wazuh_shared_dir: "/var/ossec/etc/shared/yaratest"
+    eicar_content: 'X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'
+
+  tasks:
+    # --- PHASE 1: LOCAL DOWNLOAD & EXTRACTION ---
+    - name: (Local) Create directory for rules
+      file: { path: "{{ local_rules_dir }}", state: directory, mode: '0755' }
+      delegate_to: localhost
+      run_once: true
+
+    - name: (Local) Download new YARA rules from Valhalla
+      command: /usr/local/bin/valhalla-cli -o {{ local_new_file }}
+      # command: valhalla-cli -k {{ valhalla_api_key }} -o {{ local_new_file }} # If you have enough money
+      delegate_to: localhost
+      run_once: true
+      changed_when: true
+
+    - name: (Local) Extract Number of Rules from new file
+      shell: "grep -m1 'Number of Rules:' {{ local_new_file }} | awk '{print $NF}'"
+      register: new_rules
+      delegate_to: localhost
+      run_once: true
+
+    - name: (Local) Extract first rule date from new file
+      shell: "head -n 30 {{ local_new_file }} | grep -m1 'date =' | cut -d '\"' -f2"
+      register: new_date
+      delegate_to: localhost
+      run_once: true
+
+    # --- PHASE 2: COMPARISON ---
+    - name: (Local) Check if old yara file exists
+      stat: { path: "{{ local_old_file }}" }
+      register: old_file
+      delegate_to: localhost
+      run_once: true
+
+    - name: (Local) Extract Number of Rules from old file
+      shell: "grep -m1 'Number of Rules:' {{ local_old_file }} | awk '{print $NF}'"
+      register: old_rules
+      when: old_file.stat.exists
+      delegate_to: localhost
+      run_once: true
+
+    - name: (Local) Extract first rule date from old file
+      shell: "head -n 30 {{ local_old_file }} | grep -m1 'date =' | cut -d '\"' -f2"
+      register: old_date
+      when: old_file.stat.exists
+      delegate_to: localhost
+      run_once: true
+
+    - name: (Local) Set values for comparison
+      set_fact:
+        old_rules_val: "{{ old_rules.stdout | default('none') }}"
+        old_date_val: "{{ old_date.stdout | default('none') }}"
+        new_rules_val: "{{ new_rules.stdout | default('none') }}"
+        new_date_val: "{{ new_date.stdout | default('none') }}"
+      delegate_to: localhost
+      run_once: true
+
+    - name: (Local) Debug comparison
+      debug:
+        msg:
+          - "OLD_RULES={{ old_rules_val }} NEW_RULES={{ new_rules_val }}"
+          - "OLD_DATE={{ old_date_val }} NEW_DATE={{ new_date_val }}"
+      delegate_to: localhost
+      run_once: true
+
+    - name: (Local) Determine if update is needed
+      set_fact:
+        need_update: "{{ (old_rules_val != new_rules_val) or (old_date_val != new_date_val) }}"
+      delegate_to: localhost
+      run_once: true
+
+    - name: (Local) No changes detected, end playbook
+      meta: end_play
+      when: not need_update
+
+    # --- PHASE 3: LOCAL VALIDATION (EICAR) ---
+    - name: (Local) Create EICAR test file
+      copy: { dest: "{{ local_eicar_file }}", content: "{{ eicar_content }}", mode: '0644' }
+      delegate_to: localhost
+      run_once: true
+
+    - name: (Local) Test new rules against EICAR file
+      shell: "yara -w {{ local_new_file }} {{ local_eicar_file }}"
+      register: yara_test_result
+      failed_when: false
+      delegate_to: localhost
+      run_once: true
+
+    - name: (Local) EICAR validation failed, stop playbook
+      fail:
+        msg: "ERROR: EICAR validation failed!"
+      when: yara_test_result.rc != 0 or "EICAR" not in (yara_test_result.stdout | default(''))
+      delegate_to: localhost
+      run_once: true
+
+    - name: (Local) Clean up local EICAR test file
+      file: { path: "{{ local_eicar_file }}", state: absent }
+      delegate_to: localhost
+      run_once: true
+
+    # --- PHASE 4: TRANSFER TO Wazuh MANAGER ---
+    - name: (Remote) Ensure Wazuh shared directory exists
+      file: { path: "{{ wazuh_shared_dir }}", state: directory, owner: wazuh, group: wazuh, mode: '0750' }
+
+    - name: (Transfer) Copy validated rule file to Wazuh shared directory
+      copy:
+        src: "{{ local_new_file }}"
+        dest: "{{ wazuh_shared_dir }}/yara_rules.yar"
+        owner: wazuh
+        group: wazuh
+        mode: '0640'
+
+    - name: (Remote) Deployment to Manager successful
+      debug: { msg: "YARA rules deployed to Wazuh Manager shared directory." }
+
+
+# ==========================================
+# PLAY 2: WAZUH AGENT OPERATIONS (COMPILE)
+# ==========================================
+- name: Compile YARA rules on Wazuh Agents
+  hosts: yaragroup
+  become: yes
+  vars:
+    agent_shared_rule: "/var/ossec/etc/shared/yara_rules.yar"
+    agent_compiled_rule: "/var/ossec/yara_rules/yara_rules.yar"
+
+  tasks:
+    - name: (Agent) Wait up to 60 seconds for the rule file to sync from Manager
+      wait_for:
+        path: "{{ agent_shared_rule }}"
+        timeout: 60
+        msg: "Timeout waiting for YARA rules to sync to the agent."
+
+    - name: (Agent) Compile and overwrite YARA rules
+      shell: >
+        yarac {{ agent_shared_rule }} {{ agent_compiled_rule }}.tmp &&
+        mv {{ agent_compiled_rule }}.tmp {{ agent_compiled_rule }}
+      register: compile_result
+      changed_when: compile_result.rc == 0
+
+    - name: (Agent) Show compilation success
+      debug:
+        msg: "YARA rules successfully compiled on {{ inventory_hostname }}"
+      when: compile_result.rc == 0
