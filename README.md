@@ -27,8 +27,21 @@ Oracle Linux 8 icin;
 ### Ansible ile wazuh agent'lari guncelleme
 Bu playbook sadece yara kurallari guncellendiginde sunuculara dagitim yapacak. Boylece gereksiz yere tum sunucularin kural guncellemek icin trafik yapmasina gerek olmayacak.
 
-  - pip3 install valhallaAPI
-  - playbook eklenecek!
+- Ansible sunucuda valhalla-cli kurulu olmasi gerekiyor (pip3 install valhallaAPI)
+- wazuh server'da yaratest adiyla bir grup olmali ve yara betiginin calismasini bekledigimiz sunucular buraya dahil olmali
+- Playbook'un (yara_update.yml) yaptigi:
+    -  ansible host "valhalla-cli -o yara_rules-{{today_str}}.yar" komutu ile bugunun tarihi ile kural dosyasini indiriyor
+    -  Kural dosyasinda dunden bugune degisiklik var mi kontrol ediyor
+    -  Fark varsa eicar ile kural dosyasinin calisabilirligini test ediyor
+    -  yara.yar dosyasini wazuh sunucunun /var/ossec/etc/shared/yaratest dizinine birakiyor. Burada wazuh'un dosya paylasim ozelligini kullaniyoruz. 
+    -  Client tarafinda yara kurallari yarac ile derleniyor. Bu sayede tarama islemi daha hizli yapiliyor (Not: Farkli versyona sahip yara programlari birbirinin derledigi yara kurallarini kullanamiyor, o nedenle her suncu kendi kuralini derliyor)
+
+- Burada daha kolay bir yontem izlenebilirdi ama cok fazla sunucuda cron tanimlamak gerekirdi, tercih etmedim;
+  - wazuh sunucuya valhalla-cli kurulur ve ilgili wazuh dizinine yara kurallari indirilir. (cron-1) (Valhalla her indirmede kural eklenmemiş olsa da Retrieved bilgisini degistiriyor: Gereksiz ic trafik)
+  - butun sunuculara yara kurallarini guncellemesi ve gerekli yere koyulmasi icin cron girilir (cron-2) 
+
+
+
 
 #### Ref: documentation.wazuh.com/current/user-manual/capabilities/malware-detection/fim-yara.html
 
