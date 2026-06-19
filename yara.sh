@@ -55,7 +55,7 @@ fi
 touch "$LOCK_FILE"
 
 #------------------------- YARA Tarama --------------------------#
-yara_output="$("${YARA_PATH}"/yara -w -r "$YARA_RULES" "$FILENAME" 2>/dev/null)"
+yara_output="$("${YARA_PATH}"/yara -C -w -r "$YARA_RULES" "$FILENAME" 2>/dev/null)"
 
 if [[ $yara_output != "" ]]; then
     while read -r line; do
