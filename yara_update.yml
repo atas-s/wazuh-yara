@@ -15,7 +15,7 @@
     local_old_file: "{{ local_rules_dir }}/yara_rules-{{ yesterday_str }}.yar"
     local_eicar_file: "/tmp/eicar_test.txt"
 
-    wazuh_shared_dir: "/var/ossec/etc/shared/yaratest"
+    wazuh_shared_dir: "/var/ossec/etc/shared/Yara"
     eicar_content: 'X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'
 
   tasks:
@@ -38,7 +38,7 @@
       delegate_to: localhost
       run_once: true
 
-    - name: (Local) Extract first rule date from new file
+    - name: (Local) Extract last rule date from new file
       shell: "head -n 30 {{ local_new_file }} | grep -m1 'date =' | cut -d '\"' -f2"
       register: new_date
       delegate_to: localhost
@@ -58,7 +58,7 @@
       delegate_to: localhost
       run_once: true
 
-    - name: (Local) Extract first rule date from old file
+    - name: (Local) Extract last rule date from old file
       shell: "head -n 30 {{ local_old_file }} | grep -m1 'date =' | cut -d '\"' -f2"
       register: old_date
       when: old_file.stat.exists
@@ -117,7 +117,24 @@
       delegate_to: localhost
       run_once: true
 
-    # --- PHASE 4: TRANSFER TO Wazuh MANAGER ---
+    # --- Calculate yara file md5 ---
+    - name: Calculate MD5 of the new rule file for agent validation
+      stat:
+        path: "{{ local_new_file }}"
+        checksum_algorithm: md5
+      register: new_file_md5
+      when: need_update | bool
+      delegate_to: localhost
+      run_once: true
+
+    - name: (Local) Save MD5 for agents
+      set_fact:
+        expected_yara_md5: "{{ new_file_md5.stat.checksum }}"
+      when: need_update | bool
+      delegate_to: localhost
+      run_once: true
+
+    # --- PHASE 4: TRANSFER TO MANAGER ---
     - name: (Remote) Ensure Wazuh shared directory exists
       file: { path: "{{ wazuh_shared_dir }}", state: directory, owner: wazuh, group: wazuh, mode: '0750' }
 
@@ -132,23 +149,64 @@
     - name: (Remote) Deployment to Manager successful
       debug: { msg: "YARA rules deployed to Wazuh Manager shared directory." }
 
+# --- PHASE 5: CLEANUP OLD RULES ---
+    - name: (Local) Find old yara files (14 day)
+      find:
+        paths: "{{ local_rules_dir }}"
+        patterns: "yara_rules-*.yar"
+        age: 14d          
+        file_type: file   
+        recurse: no       
+      register: old_yara_files
+
+    - name: (Local) Delete old yara file 
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ old_yara_files.files }}"
+      loop_control:
+        label: "{{ item.path | basename }}" 
+      when: old_yara_files.matched > 0      
+
 
 # ==========================================
 # PLAY 2: WAZUH AGENT OPERATIONS (COMPILE)
 # ==========================================
 - name: Compile YARA rules on Wazuh Agents
   hosts: yaragroup
+  gather_facts: no
   become: yes
   vars:
     agent_shared_rule: "/var/ossec/etc/shared/yara_rules.yar"
     agent_compiled_rule: "/var/ossec/yara_rules/yara_rules.yar"
 
   tasks:
-    - name: (Agent) Wait up to 60 seconds for the rule file to sync from Manager
-      wait_for:
-        path: "{{ agent_shared_rule }}"
-        timeout: 60
-        msg: "Timeout waiting for YARA rules to sync to the agent."
+    - name: If there is not change stop the playbook
+      block:
+        - name: Differences result
+          debug:
+            msg: "YARA kurallarinda yeni bir degisiklik tespit edilmedi. Agentlarda derleme islemi atlaniyor."
+        - name: Stop The Play2
+          meta: end_play
+      when: not (hostvars['wazuh-server']['need_update'] | default(false) | bool)
+
+# -- Check md5: Wait for copy process --
+    - name: (Agent) Wait for the NEW rule file to arrive from Manager (MD5 Check)
+      raw: |
+        EXPECTED_MD5="{{ hostvars['wazuh-server']['expected_yara_md5'] }}"
+        # Maksimum 4 minutes (120 cycle * 2 second) wait
+        for i in $(seq 1 120); do
+          if [ -f "/var/ossec/etc/shared/yara_rules.yar" ]; then
+            CURRENT_MD5=$(md5sum /var/ossec/etc/shared/yara_rules.yar | awk '{print $1}')
+            if [ "$CURRENT_MD5" = "$EXPECTED_MD5" ]; then
+              exit 0
+            fi
+          fi
+          sleep 2
+        done
+        exit 1
+      changed_when: false
+
 
     - name: (Agent) Compile and overwrite YARA rules
       shell: >
